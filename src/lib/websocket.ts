@@ -2,8 +2,8 @@ import type { IncomingMessage } from "http";
 import type { Server } from "http";
 import { URL } from "url";
 import { WebSocket, WebSocketServer } from "ws";
-import { logger } from "./logger";
-import { MESSAGES_KEY, ROOM_KEY, getRedis } from "./redis";
+import { logger } from "./logger.js";
+import { MESSAGES_KEY, ROOM_KEY, getRedis } from "./redis.js";
 
 interface Client {
   ws: WebSocket & { isAlive?: boolean };
@@ -32,7 +32,7 @@ export function setupWebSocketServer(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/ws" });
 
   const heartbeat = setInterval(() => {
-    wss.clients.forEach((rawWs) => {
+    wss.clients.forEach((rawWs: WebSocket) => {
       const ws = rawWs as WebSocket & { isAlive?: boolean };
       if (ws.isAlive === false) {
         ws.terminate();
@@ -80,7 +80,7 @@ export function setupWebSocketServer(server: Server) {
 
     const history = await redis.lrange(MESSAGES_KEY(roomId), -50, -1);
     const messages = history
-      .map((m) => {
+      .map((m: WebSocket.RawData) => {
         try {
           return JSON.parse(m);
         } catch {
@@ -143,7 +143,7 @@ export function setupWebSocketServer(server: Server) {
       logger.info({ roomId, userId, username }, "User left room");
     });
 
-    ws.on("error", (err) => {
+    ws.on("error", (err: Error) => {
       logger.error({ err, roomId, userId }, "WebSocket client error");
     });
   });

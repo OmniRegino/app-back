@@ -1,5 +1,5 @@
 import Redis from "ioredis";
-import { logger } from "./logger";
+import { logger } from "./logger.js";
 
 let client: Redis | null = null;
 
@@ -24,21 +24,30 @@ export function getRedis(): Redis {
   }
 
   const urlStr = cleanRedisUrl(rawUrl);
-  logger.info({ urlStart: urlStr.slice(0, 12) }, "Redis URL prefix (first 12 chars)");
+  logger.info(
+    { urlStart: urlStr.slice(0, 12) },
+    "Redis URL prefix (first 12 chars)",
+  );
 
   // Parse using WHATWG URL so we can extract connection options cleanly
   let parsed: URL;
   try {
     parsed = new URL(urlStr);
   } catch (e) {
-    throw new Error(`Invalid REDIS_URL (could not parse): ${(e as Error).message}`);
+    throw new Error(
+      `Invalid REDIS_URL (could not parse): ${(e as Error).message}`,
+    );
   }
 
   const isTls = parsed.protocol === "rediss:";
   const host = parsed.hostname;
-  const port = parsed.port ? parseInt(parsed.port, 10) : (isTls ? 6380 : 6379);
-  const password = parsed.password ? decodeURIComponent(parsed.password) : undefined;
-  const username = parsed.username ? decodeURIComponent(parsed.username) : undefined;
+  const port = parsed.port ? parseInt(parsed.port, 10) : isTls ? 6380 : 6379;
+  const password = parsed.password
+    ? decodeURIComponent(parsed.password)
+    : undefined;
+  const username = parsed.username
+    ? decodeURIComponent(parsed.username)
+    : undefined;
 
   logger.info({ host, port, isTls }, "Connecting to Redis");
 
@@ -52,7 +61,7 @@ export function getRedis(): Redis {
     enableReadyCheck: false,
     enableOfflineQueue: true,
     lazyConnect: false,
-    retryStrategy(times) {
+    retryStrategy(times: number) {
       if (times > 10) {
         logger.error("Redis max retries reached");
         return null;
@@ -61,8 +70,12 @@ export function getRedis(): Redis {
       logger.warn({ times, delay }, "Redis reconnecting");
       return delay;
     },
-    reconnectOnError(err) {
-      if (["READONLY", "ECONNRESET", "ETIMEDOUT"].some((e) => err.message.includes(e))) {
+    reconnectOnError(err: Error) {
+      if (
+        ["READONLY", "ECONNRESET", "ETIMEDOUT"].some((e) =>
+          err.message.includes(e),
+        )
+      ) {
         return 2;
       }
       return false;
@@ -71,7 +84,7 @@ export function getRedis(): Redis {
 
   client.on("connect", () => logger.info("Redis connected"));
   client.on("ready", () => logger.info("Redis ready"));
-  client.on("error", (err) => logger.error({ err }, "Redis error"));
+  client.on("error", (err: Error) => logger.error({ err }, "Redis error"));
   client.on("close", () => logger.warn("Redis connection closed"));
   client.on("reconnecting", () => logger.info("Redis reconnecting..."));
 
@@ -82,9 +95,18 @@ export async function ensureRedisConnected(): Promise<Redis> {
   const redis = getRedis();
   if (redis.status === "ready") return redis;
   await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Redis connect timeout")), 10_000);
-    redis.once("ready", () => { clearTimeout(timeout); resolve(); });
-    redis.once("error", (err) => { clearTimeout(timeout); reject(err); });
+    const timeout = setTimeout(
+      () => reject(new Error("Redis connect timeout")),
+      10_000,
+    );
+    redis.once("ready", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    redis.once("error", (err: Error) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
   });
   return redis;
 }

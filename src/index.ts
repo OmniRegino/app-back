@@ -1,8 +1,8 @@
 import { createServer } from "http";
-import app from "./app";
-import { logger } from "./lib/logger";
-import { getRedis } from "./lib/redis";
-import { setupWebSocketServer } from "./lib/websocket";
+import app from "./app.js";
+import { logger } from "./lib/logger.js";
+import { getRedis } from "./lib/redis.js";
+import { setupWebSocketServer } from "./lib/websocket.js";
 import "dotenv/config";
 
 const rawPort = process.env["PORT"];
