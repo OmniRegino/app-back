@@ -1,21 +1,24 @@
-import Redis from "ioredis";
+import IORedis from "ioredis";
 import { logger } from "./logger.js";
 
-let client: Redis | null = null;
+let client: IORedis | null = null;
 
 function cleanRedisUrl(raw: string): string {
   let s = raw.trim();
-  // Strip URL-encoded quotes (%22) and literal quotes from both ends
+
+  // Strip URL-encoded quotes (%22) and literal quotes
   const junk = /^(%22|%27|"|')+|(%22|%27|"|')+$/g;
+
   let prev = "";
   while (prev !== s) {
     prev = s;
     s = s.replace(junk, "").trim();
   }
+
   return s;
 }
 
-export function getRedis(): Redis {
+export function getRedis(): IORedis {
   if (client) return client;
 
   const rawUrl = process.env.REDIS_URL;
@@ -24,12 +27,12 @@ export function getRedis(): Redis {
   }
 
   const urlStr = cleanRedisUrl(rawUrl);
+
   logger.info(
     { urlStart: urlStr.slice(0, 12) },
     "Redis URL prefix (first 12 chars)",
   );
 
-  // Parse using WHATWG URL so we can extract connection options cleanly
   let parsed: URL;
   try {
     parsed = new URL(urlStr);
@@ -42,16 +45,18 @@ export function getRedis(): Redis {
   const isTls = parsed.protocol === "rediss:";
   const host = parsed.hostname;
   const port = parsed.port ? parseInt(parsed.port, 10) : isTls ? 6380 : 6379;
+
   const password = parsed.password
     ? decodeURIComponent(parsed.password)
     : undefined;
+
   const username = parsed.username
     ? decodeURIComponent(parsed.username)
     : undefined;
 
   logger.info({ host, port, isTls }, "Connecting to Redis");
 
-  client = new Redis({
+  client = new IORedis({
     host,
     port,
     ...(password ? { password } : {}),
@@ -61,6 +66,7 @@ export function getRedis(): Redis {
     enableReadyCheck: false,
     enableOfflineQueue: true,
     lazyConnect: false,
+
     retryStrategy(times: number) {
       if (times > 10) {
         logger.error("Redis max retries reached");
@@ -70,6 +76,7 @@ export function getRedis(): Redis {
       logger.warn({ times, delay }, "Redis reconnecting");
       return delay;
     },
+
     reconnectOnError(err: Error) {
       if (
         ["READONLY", "ECONNRESET", "ETIMEDOUT"].some((e) =>
@@ -91,26 +98,32 @@ export function getRedis(): Redis {
   return client;
 }
 
-export async function ensureRedisConnected(): Promise<Redis> {
+export async function ensureRedisConnected(): Promise<IORedis> {
   const redis = getRedis();
+
   if (redis.status === "ready") return redis;
+
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error("Redis connect timeout")),
       10_000,
     );
+
     redis.once("ready", () => {
       clearTimeout(timeout);
       resolve();
     });
+
     redis.once("error", (err: Error) => {
       clearTimeout(timeout);
       reject(err);
     });
   });
+
   return redis;
 }
 
+// 🔑 Keys
 export const ROOMS_GEO_KEY = "rooms:geo";
 export const ROOMS_EXPIRY_KEY = "rooms:expiry";
 export const ROOM_KEY = (id: string) => `room:${id}`;

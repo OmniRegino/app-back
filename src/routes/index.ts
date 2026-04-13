@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import roomsRouter from "./rooms";
+import roomsRouter from "./rooms.js";
 
 const router: IRouter = Router();
 
