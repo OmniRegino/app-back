@@ -1,8 +1,7 @@
-import Redis from "ioredis";
-import type { Redis as RedisType } from "ioredis";
+import { Redis } from "ioredis";
 import { logger } from "./logger.js";
 
-let client: RedisType | null = null;
+let client: Redis | null = null;
 
 function cleanRedisUrl(raw: string): string {
   let s = raw.trim();
@@ -18,7 +17,7 @@ function cleanRedisUrl(raw: string): string {
   return s;
 }
 
-export function getRedis(): RedisType {
+export function getRedis(): Redis {
   if (client) return client;
 
   const rawUrl = process.env.REDIS_URL;
@@ -56,12 +55,8 @@ export function getRedis(): RedisType {
 
   logger.info({ host, port, isTls }, "Connecting to Redis");
 
-  // ✅ KEY FIX: cast ONLY the constructor, not the params
-  const RedisCtor = Redis as unknown as new (
-    options: ConstructorParameters<typeof Redis>[0],
-  ) => RedisType;
-
-  client = new RedisCtor({
+  // ✅ CLEAN: no casting, no hacks
+  client = new Redis({
     host,
     port,
     ...(password ? { password } : {}),
@@ -77,9 +72,7 @@ export function getRedis(): RedisType {
         logger.error("Redis max retries reached");
         return null;
       }
-      const delay = Math.min(times * 300, 5000);
-      logger.warn({ times, delay }, "Redis reconnecting");
-      return delay;
+      return Math.min(times * 300, 5000);
     },
 
     reconnectOnError(err: Error) {
@@ -94,18 +87,16 @@ export function getRedis(): RedisType {
     },
   });
 
-  const c = client!;
+  client.on("connect", () => logger.info("Redis connected"));
+  client.on("ready", () => logger.info("Redis ready"));
+  client.on("error", (err: Error) => logger.error({ err }, "Redis error"));
+  client.on("close", () => logger.warn("Redis connection closed"));
+  client.on("reconnecting", () => logger.info("Redis reconnecting..."));
 
-  c.on("connect", () => logger.info("Redis connected"));
-  c.on("ready", () => logger.info("Redis ready"));
-  c.on("error", (err: Error) => logger.error({ err }, "Redis error"));
-  c.on("close", () => logger.warn("Redis connection closed"));
-  c.on("reconnecting", () => logger.info("Redis reconnecting..."));
-
-  return c;
+  return client;
 }
 
-export async function ensureRedisConnected(): Promise<RedisType> {
+export async function ensureRedisConnected(): Promise<Redis> {
   const redis = getRedis();
 
   if (redis.status === "ready") return redis;
