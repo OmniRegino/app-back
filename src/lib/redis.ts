@@ -1,6 +1,11 @@
-import Redis from "ioredis";
+import IORedis from "ioredis";
 import type { Redis as RedisType } from "ioredis";
 import { logger } from "./logger.js";
+
+// ✅ FIX: force correct constructor typing
+const Redis = IORedis as unknown as {
+  new (...args: ConstructorParameters<typeof IORedis>): RedisType;
+};
 
 let client: RedisType | null = null;
 
@@ -56,7 +61,7 @@ export function getRedis(): RedisType {
 
   logger.info({ host, port, isTls }, "Connecting to Redis");
 
-  // ✅ FIX: proper constructor
+  // ✅ FIX: now constructable
   client = new Redis({
     host,
     port,
@@ -90,13 +95,16 @@ export function getRedis(): RedisType {
     },
   });
 
-  client.on("connect", () => logger.info("Redis connected"));
-  client.on("ready", () => logger.info("Redis ready"));
-  client.on("error", (err: Error) => logger.error({ err }, "Redis error"));
-  client.on("close", () => logger.warn("Redis connection closed"));
-  client.on("reconnecting", () => logger.info("Redis reconnecting..."));
+  // ✅ FIX: assert non-null once initialized
+  const c = client!;
 
-  return client;
+  c.on("connect", () => logger.info("Redis connected"));
+  c.on("ready", () => logger.info("Redis ready"));
+  c.on("error", (err: Error) => logger.error({ err }, "Redis error"));
+  c.on("close", () => logger.warn("Redis connection closed"));
+  c.on("reconnecting", () => logger.info("Redis reconnecting..."));
+
+  return c;
 }
 
 export async function ensureRedisConnected(): Promise<RedisType> {

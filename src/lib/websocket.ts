@@ -92,7 +92,7 @@ export function setupWebSocketServer(server: Server) {
     const history = await redis.lrange(MESSAGES_KEY(roomId), -50, -1);
 
     const messages = history
-      .map((m: RawData) => {
+      .map((m: string) => {
         try {
           return JSON.parse(m.toString());
         } catch {
