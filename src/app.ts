@@ -7,13 +7,16 @@ import { logger } from "./lib/logger.js";
 
 const app: Express = express();
 
+// ✅ FIX: use .default for ESM compatibility
+const httpLogger = (pinoHttp as any).default ?? pinoHttp;
+
 app.use(
-  pinoHttp({
+  httpLogger({
     logger,
     serializers: {
       req(req: Request) {
         return {
-          id: req.id,
+          id: (req as any).id,
           method: req.method,
           url: req.url?.split("?")[0],
         };

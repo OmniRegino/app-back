@@ -1,12 +1,12 @@
-import IORedis from "ioredis";
+import Redis from "ioredis";
+import type { Redis as RedisType } from "ioredis";
 import { logger } from "./logger.js";
 
-let client: IORedis | null = null;
+let client: RedisType | null = null;
 
 function cleanRedisUrl(raw: string): string {
   let s = raw.trim();
 
-  // Strip URL-encoded quotes (%22) and literal quotes
   const junk = /^(%22|%27|"|')+|(%22|%27|"|')+$/g;
 
   let prev = "";
@@ -18,7 +18,7 @@ function cleanRedisUrl(raw: string): string {
   return s;
 }
 
-export function getRedis(): IORedis {
+export function getRedis(): RedisType {
   if (client) return client;
 
   const rawUrl = process.env.REDIS_URL;
@@ -56,7 +56,8 @@ export function getRedis(): IORedis {
 
   logger.info({ host, port, isTls }, "Connecting to Redis");
 
-  client = new IORedis({
+  // ✅ FIX: proper constructor
+  client = new Redis({
     host,
     port,
     ...(password ? { password } : {}),
@@ -98,7 +99,7 @@ export function getRedis(): IORedis {
   return client;
 }
 
-export async function ensureRedisConnected(): Promise<IORedis> {
+export async function ensureRedisConnected(): Promise<RedisType> {
   const redis = getRedis();
 
   if (redis.status === "ready") return redis;
