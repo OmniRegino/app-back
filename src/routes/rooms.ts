@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
+import type { Request, Response } from "express";
 import {
   ROOM_KEY,
   ROOMS_EXPIRY_KEY,
   ROOMS_GEO_KEY,
   getRedis,
-} from "../lib/redis";
+} from "../lib/redis.js";
 
 const router: IRouter = Router();
 
@@ -36,7 +37,7 @@ function generateRoomId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-router.post("/rooms", async (req, res): Promise<void> => {
+router.post("/rooms", async (req: Request, res: Response): Promise<void> => {
   const { name, lat, lng, radiusKm, creatorId } = req.body as {
     name?: unknown;
     lat?: unknown;
@@ -101,71 +102,81 @@ router.post("/rooms", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/rooms/nearby", async (req, res): Promise<void> => {
-  const lat = parseFloat(req.query["lat"] as string);
-  const lng = parseFloat(req.query["lng"] as string);
-  const radiusKm = parseFloat(req.query["radiusKm"] as string) || 5;
+router.get(
+  "/rooms/nearby",
+  async (req: Request, res: Response): Promise<void> => {
+    const lat = parseFloat(req.query["lat"] as string);
+    const lng = parseFloat(req.query["lng"] as string);
+    const radiusKm = parseFloat(req.query["radiusKm"] as string) || 5;
 
-  if (Number.isNaN(lat) || Number.isNaN(lng)) {
-    res.status(400).json({ error: "Valid lat and lng query params required" });
-    return;
-  }
-
-  try {
-    const redis = getRedis();
-
-    const now = Date.now();
-    const expiredIds = await redis.zrangebyscore(ROOMS_EXPIRY_KEY, "-inf", now);
-    if (expiredIds.length > 0) {
-      await redis.zremrangebyscore(ROOMS_EXPIRY_KEY, "-inf", now);
-      await redis.zrem(ROOMS_GEO_KEY, ...expiredIds);
-      for (const id of expiredIds) {
-        await redis.del(ROOM_KEY(id));
-      }
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      res
+        .status(400)
+        .json({ error: "Valid lat and lng query params required" });
+      return;
     }
 
-    const roomIds = (await redis.eval(
-      NEARBY_ROOMS_SCRIPT,
-      1,
-      ROOMS_GEO_KEY,
-      lng.toString(),
-      lat.toString(),
-      radiusKm.toString(),
-    )) as string[];
+    try {
+      const redis = getRedis();
 
-    const rooms = await Promise.all(
-      (roomIds ?? []).map(async (roomId) => {
-        const meta = await redis.hgetall(ROOM_KEY(roomId));
-        if (!meta || !meta["name"]) return null;
-        const roomLat = parseFloat(meta["lat"] ?? "0");
-        const roomLng = parseFloat(meta["lon"] ?? "0");
-        const dLat = ((roomLat - lat) * Math.PI) / 180;
-        const dLng = ((roomLng - lng) * Math.PI) / 180;
-        const a =
-          Math.sin(dLat / 2) ** 2 +
-          Math.cos((lat * Math.PI) / 180) *
-            Math.cos((roomLat * Math.PI) / 180) *
-            Math.sin(dLng / 2) ** 2;
-        const distance = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return {
-          id: roomId,
-          name: meta["name"],
-          lat: roomLat,
-          lng: roomLng,
-          radiusKm: parseFloat(meta["radiusKm"] ?? "5"),
-          userCount: Math.max(0, parseInt(meta["userCount"] ?? "0", 10)),
-          creatorId: meta["creatorId"] ?? "",
-          createdAt: parseInt(meta["createdAt"] ?? "0", 10),
-          distance: Math.round(distance * 10) / 10,
-        };
-      }),
-    );
+      const now = Date.now();
+      const expiredIds = await redis.zrangebyscore(
+        ROOMS_EXPIRY_KEY,
+        "-inf",
+        now,
+      );
+      if (expiredIds.length > 0) {
+        await redis.zremrangebyscore(ROOMS_EXPIRY_KEY, "-inf", now);
+        await redis.zrem(ROOMS_GEO_KEY, ...expiredIds);
+        for (const id of expiredIds) {
+          await redis.del(ROOM_KEY(id));
+        }
+      }
 
-    res.json({ rooms: rooms.filter(Boolean) });
-  } catch (err) {
-    req.log.error({ err }, "Failed to fetch nearby rooms");
-    res.status(500).json({ error: "Failed to fetch nearby rooms" });
-  }
-});
+      const roomIds = (await redis.eval(
+        NEARBY_ROOMS_SCRIPT,
+        1,
+        ROOMS_GEO_KEY,
+        lng.toString(),
+        lat.toString(),
+        radiusKm.toString(),
+      )) as string[];
+
+      const rooms = await Promise.all(
+        (roomIds ?? []).map(async (roomId) => {
+          const meta = await redis.hgetall(ROOM_KEY(roomId));
+          if (!meta || !meta["name"]) return null;
+          const roomLat = parseFloat(meta["lat"] ?? "0");
+          const roomLng = parseFloat(meta["lon"] ?? "0");
+          const dLat = ((roomLat - lat) * Math.PI) / 180;
+          const dLng = ((roomLng - lng) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((lat * Math.PI) / 180) *
+              Math.cos((roomLat * Math.PI) / 180) *
+              Math.sin(dLng / 2) ** 2;
+          const distance =
+            6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          return {
+            id: roomId,
+            name: meta["name"],
+            lat: roomLat,
+            lng: roomLng,
+            radiusKm: parseFloat(meta["radiusKm"] ?? "5"),
+            userCount: Math.max(0, parseInt(meta["userCount"] ?? "0", 10)),
+            creatorId: meta["creatorId"] ?? "",
+            createdAt: parseInt(meta["createdAt"] ?? "0", 10),
+            distance: Math.round(distance * 10) / 10,
+          };
+        }),
+      );
+
+      res.json({ rooms: rooms.filter(Boolean) });
+    } catch (err) {
+      req.log.error({ err }, "Failed to fetch nearby rooms");
+      res.status(500).json({ error: "Failed to fetch nearby rooms" });
+    }
+  },
+);
 
 export default router;

@@ -25,7 +25,7 @@ getRedis();
 const server = createServer(app);
 setupWebSocketServer(server);
 
-server.on("error", (err) => {
+server.on("error", (err: Error) => {
   logger.error({ err }, "Server error");
   process.exit(1);
 });
