@@ -1,11 +1,6 @@
-import IORedis from "ioredis";
+import Redis from "ioredis";
 import type { Redis as RedisType } from "ioredis";
 import { logger } from "./logger.js";
-
-// ✅ FIX: force correct constructor typing
-const Redis = IORedis as unknown as {
-  new (...args: ConstructorParameters<typeof IORedis>): RedisType;
-};
 
 let client: RedisType | null = null;
 
@@ -61,8 +56,12 @@ export function getRedis(): RedisType {
 
   logger.info({ host, port, isTls }, "Connecting to Redis");
 
-  // ✅ FIX: now constructable
-  client = new Redis({
+  // ✅ KEY FIX: cast ONLY the constructor, not the params
+  const RedisCtor = Redis as unknown as new (
+    options: ConstructorParameters<typeof Redis>[0],
+  ) => RedisType;
+
+  client = new RedisCtor({
     host,
     port,
     ...(password ? { password } : {}),
@@ -95,7 +94,6 @@ export function getRedis(): RedisType {
     },
   });
 
-  // ✅ FIX: assert non-null once initialized
   const c = client!;
 
   c.on("connect", () => logger.info("Redis connected"));
