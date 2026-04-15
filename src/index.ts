@@ -22,12 +22,20 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 // Eagerly start Redis connection so it's ready before first request
-getRedis();
-
+(async () => {
+  await getRedis();
+})();
 const server = createServer(app);
-setupWebSocketServer(server);
-const mapWs = setupMapWebSocket(server);
-setMapWsInstance(mapWs);
+let mapWs;
+
+try {
+  setupWebSocketServer(server);
+  mapWs = setupMapWebSocket(server);
+  setMapWsInstance(mapWs);
+} catch (err) {
+  logger.error({ err }, "Failed to initialize WebSockets");
+  process.exit(1);
+}
 
 server.on("error", (err: Error) => {
   logger.error({ err }, "Server error");
