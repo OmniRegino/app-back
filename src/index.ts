@@ -1,10 +1,13 @@
-import { createServer } from "http";
+import { createServer, IncomingMessage } from "http";
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { getRedis } from "./lib/redis.js";
-import { setupWebSocketServer } from "./lib/websocket.js";
 import "dotenv/config";
-import { setupMapWebSocket } from "./lib/map-ws.js";
+import type { Socket } from "net";
+
+import { WebSocketServer } from "ws";
+import { handleMainWS } from "./lib/websocket.js";
+import { handleMapWS, mapWsInstance } from "./lib/map-ws.js";
 import { setMapWsInstance } from "./lib/ws-instance.js";
 
 const rawPort = process.env["PORT"];
@@ -21,21 +24,33 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-// Eagerly start Redis connection so it's ready before first request
+// ✅ Start Redis early
 (async () => {
   await getRedis();
 })();
-const server = createServer(app);
-let mapWs;
 
-try {
-  setupWebSocketServer(server);
-  mapWs = setupMapWebSocket(server);
-  setMapWsInstance(mapWs);
-} catch (err) {
-  logger.error({ err }, "Failed to initialize WebSockets");
-  process.exit(1);
-}
+const server = createServer(app);
+
+const wss = new WebSocketServer({ noServer: true });
+
+server.on("upgrade", (req: IncomingMessage, socket: Socket, head: Buffer) => {
+  const url = new URL(req.url ?? "", "http://localhost");
+
+  if (url.pathname === "/api/ws") {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      handleMainWS(ws, req);
+    });
+  } else if (url.pathname === "/api/ws/map") {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      handleMapWS(ws, req);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+// ✅ expose map ws instance globally
+setMapWsInstance(mapWsInstance);
 
 server.on("error", (err: Error) => {
   logger.error({ err }, "Server error");

@@ -6,7 +6,7 @@ import {
   ROOMS_GEO_KEY,
   getRedis,
 } from "../lib/redis.js";
-import { mapWsInstance } from "../lib/ws-instance.js";
+import { mapWs } from "../lib/ws-instance.js";
 
 const router: IRouter = Router();
 
@@ -35,7 +35,7 @@ return ids
 `;
 
 function generateRoomId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
 router.post("/rooms", async (req: Request, res: Response): Promise<void> => {
@@ -97,16 +97,20 @@ router.post("/rooms", async (req: Request, res: Response): Promise<void> => {
       userCount: 0,
       createdAt: now,
     });
-    mapWsInstance?.broadcastRoomCreated({
-      id: roomId,
-      name: name.trim(),
-      lat,
-      lng,
-      radiusKm: radius,
-      creatorId,
-      userCount: 0,
-      createdAt: now,
-    });
+    if (!mapWs) {
+      req.log.warn("Map WS not ready");
+    } else {
+      mapWs?.broadcastRoomCreated({
+        id: roomId,
+        name: name.trim(),
+        lat,
+        lng,
+        radiusKm: radius,
+        creatorId,
+        userCount: 0,
+        createdAt: now,
+      });
+    }
   } catch (err) {
     req.log.error({ err }, "Failed to create room");
     res.status(500).json({ error: "Failed to create room" });
@@ -139,8 +143,8 @@ router.get(
       if (expiredIds.length > 0) {
         await redis.zremrangebyscore(ROOMS_EXPIRY_KEY, "-inf", now);
         await redis.zrem(ROOMS_GEO_KEY, ...expiredIds);
-        for (const id of expiredIds) {
-          await redis.del(ROOM_KEY(id));
+        if (expiredIds.length > 0) {
+          await redis.del(expiredIds.map((id: any) => ROOM_KEY(id)));
         }
       }
 

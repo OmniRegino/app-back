@@ -1,10 +1,9 @@
-// src/lib/ws-instance.ts
-import type { setupMapWebSocket } from "./map-ws.js";
+import type { mapWsInstance } from "./map-ws.js";
 
-export type MapWsInstance = ReturnType<typeof setupMapWebSocket>;
+export type MapWsInstance = typeof mapWsInstance;
 
-export let mapWsInstance: MapWsInstance | null = null;
+export let mapWs: MapWsInstance | null = null;
 
 export function setMapWsInstance(instance: MapWsInstance) {
-  mapWsInstance = instance;
+  mapWs = instance;
 }
