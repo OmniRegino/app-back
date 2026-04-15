@@ -6,6 +6,7 @@ import {
   ROOMS_GEO_KEY,
   getRedis,
 } from "../lib/redis.js";
+import { mapWsInstance } from "../lib/ws-instance.js";
 
 const router: IRouter = Router();
 
@@ -87,6 +88,16 @@ router.post("/rooms", async (req: Request, res: Response): Promise<void> => {
 
     req.log.info({ roomId, name: name.trim(), lat, lng }, "Room created");
     res.status(201).json({
+      id: roomId,
+      name: name.trim(),
+      lat,
+      lng,
+      radiusKm: radius,
+      creatorId,
+      userCount: 0,
+      createdAt: now,
+    });
+    mapWsInstance?.broadcastRoomCreated({
       id: roomId,
       name: name.trim(),
       lat,

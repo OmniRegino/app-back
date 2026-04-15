@@ -4,6 +4,8 @@ import { logger } from "./lib/logger.js";
 import { getRedis } from "./lib/redis.js";
 import { setupWebSocketServer } from "./lib/websocket.js";
 import "dotenv/config";
+import { setupMapWebSocket } from "./lib/map-ws.js";
+import { setMapWsInstance } from "./lib/ws-instance.js";
 
 const rawPort = process.env["PORT"];
 
@@ -24,6 +26,8 @@ getRedis();
 
 const server = createServer(app);
 setupWebSocketServer(server);
+const mapWs = setupMapWebSocket(server);
+setMapWsInstance(mapWs);
 
 server.on("error", (err: Error) => {
   logger.error({ err }, "Server error");
