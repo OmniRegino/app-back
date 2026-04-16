@@ -36,7 +36,7 @@ const wss = new WebSocketServer({ noServer: true });
 server.on("upgrade", (req: IncomingMessage, socket: Socket, head: Buffer) => {
   const url = new URL(req.url ?? "", "http://localhost");
 
-  if (url.pathname === "/api/ws") {
+  if (url.pathname === "/api/ws/chat") {
     wss.handleUpgrade(req, socket, head, (ws) => {
       handleMainWS(ws, req);
     });
